@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 public class ReconstructionID
 {
     public int id;
+    public string url;
 }
 
 [Serializable]
