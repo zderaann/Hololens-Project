@@ -1,6 +1,8 @@
 ﻿using Unity;
 using System;
 
+
+//Gets scene from JSON
 [Serializable]
 public class SceneItem
 {
