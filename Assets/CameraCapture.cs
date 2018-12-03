@@ -352,14 +352,16 @@ public class CameraCapture : MonoBehaviour
                     captureCameras[i].imageID = reconstructionCams[i].imageID;
                 }
 
+                WriteCaptureCamsToFile();
+
                 ProcessReconstructionView p = new ProcessReconstructionView();
                 transform =  p.DrawReconstructionView(reconstructionCams, captureCameras);
 
 
 
                 DownloadReconstruction();
-                
 
+                
             }
 
 
@@ -588,6 +590,7 @@ void WriteCaptureCamsToFile()
   }
 
 }
+
 /*
 void WriteReconstructionCamsToFile(ReconstructionViewItem result)
 {

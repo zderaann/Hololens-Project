@@ -101,7 +101,7 @@ public class PLYloader
                         if (index < vertexCount)
                         {
 
-                            vertices[index] = (Rs * new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle())) + new Vector4(transform.t.x, transform.t.y, transform.t.z,1);
+                            vertices[index] = (/*Rs * */new Vector3(reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle())) /*+ new Vector4(transform.t.x, transform.t.y, transform.t.z,1)*/;
                             normals[index] = new Vector3(-reader.ReadSingle(), reader.ReadSingle(), reader.ReadSingle());
                             Color col = new Color(reader.ReadByte() / 255f, reader.ReadByte() / 255f, reader.ReadByte() / 255f, 1f);
 

@@ -97,7 +97,7 @@ public class CameraItem
                 if(numberOfCameras != numberOfCams)
                 {
                     Debug.Log("Number of cameras does not match " + numberOfCameras + " vs. " + numberOfCams);
-                    return null;
+                    //return null;
                 }
 
                 //get image number
