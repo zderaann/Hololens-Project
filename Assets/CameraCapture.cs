@@ -18,7 +18,7 @@ public class CameraCapture : MonoBehaviour
 
     private Vector3 startHeadPosition;
     private Vector3 newHeadPosition;
-    private double distance = 0.3;
+    private double distance = 0.3; //ZMENIT NA 10 PRO TESTOVANI
 
     PhotoCapture photoCaptureObject = null;
 
@@ -40,6 +40,7 @@ public class CameraCapture : MonoBehaviour
     public GameObject reconstructionObject;
 
     string BASEURL = "http://10.35.100.210:9099";
+    //string BASEURL = "http://10.37.1.210:9099";
     string authName = "xxx";
     string authPassword = "xxx";
 
@@ -48,7 +49,9 @@ public class CameraCapture : MonoBehaviour
 
     List<CameraItem> captureCameras = new List<CameraItem>();
 
- //   int reconstructionID = 0;
+    CalculatedTransform cameraTransform;
+
+    //   int reconstructionID = 0;
 
     // initialization
     void Start() {  
@@ -84,8 +87,9 @@ public class CameraCapture : MonoBehaviour
         {
             Debug.Log("Camera capture off, reconstruction query");
             reconstruction = true;
-            RunReconstruction();
-           // DownloadCameras(true);
+             RunReconstruction();
+             //DownloadCameras(true);
+            //GetTransformation();
         }
     }
 
@@ -268,7 +272,11 @@ public class CameraCapture : MonoBehaviour
     void HandleReconstructionRun(AsyncOperation op)
     {
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-        DownloadCameras();
+        //WriteCaptureCamsToFile();
+        GetTransformation();
+
+        //DownloadCameras();
+        //GetTransformation();
     }
 
     //Downloads reconstruction from the server
@@ -355,17 +363,63 @@ public class CameraCapture : MonoBehaviour
                 WriteCaptureCamsToFile();
 
                 ProcessReconstructionView p = new ProcessReconstructionView();
-                transform =  p.DrawReconstructionView(reconstructionCams, captureCameras);
+                p.DrawReconstructionView(reconstructionCams, captureCameras, cameraTransform);
 
 
 
-                DownloadReconstruction();
+                //DownloadReconstruction();
 
                 
             }
 
 
         }
+    }
+
+
+    //makes a request for the server to run COLMAP
+    void GetTransformation() //TODO return transformation
+    {
+
+        string url = BASEURL + "/api/cv/get_transformation/";
+
+        string json = JsonUtility.ToJson(new AllCamerasItem(photoCount, captureCameras));
+
+        //Debug.Log("\n" + json + "\n");
+
+   
+
+        UnityWebRequest request = UnityWebRequest.Put(url, json);
+        request.method = "POST";
+
+        // Specify HTTP headers
+        request.SetRequestHeader("Content-Type", "application/json");
+
+
+
+        UnityWebRequestAsyncOperation op = request.SendWebRequest();
+
+        op.completed += HandleGetTransformation;
+
+    }
+
+    //handler for http request
+    void HandleGetTransformation(AsyncOperation op)
+    {
+        UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
+        CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
+        Debug.Log(aop.webRequest.downloadHandler.text);
+        result.rot = Matrix4x4.zero;
+        result.trans = new Vector3(result.translation[0], result.translation[1], result.translation[2]);
+
+        result.rot.SetRow(0, new Vector4(result.rotation1[0], result.rotation1[1], result.rotation1[2], 0f));
+        result.rot.SetRow(1, new Vector4(result.rotation2[0], result.rotation2[1], result.rotation2[2], 0f));
+        result.rot.SetRow(2, new Vector4(result.rotation3[0], result.rotation3[1], result.rotation3[2], 0f));
+        result.rot[3, 3] = 1;
+
+        cameraTransform = result;
+
+        DownloadCameras();
     }
 
 
@@ -575,7 +629,7 @@ public class CameraCapture : MonoBehaviour
   }
 }
 */
-void WriteCaptureCamsToFile()
+    void WriteCaptureCamsToFile()
 {
   string path = Path.Combine(Application.persistentDataPath, "CaptureCameras.txt");
 

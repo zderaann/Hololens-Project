@@ -46,7 +46,7 @@ public class ProcessReconstructionView
     }
 
     //Transforms and draws COLMAP cameras
-    public RansacItem DrawReconstructionView(List<CameraItem> reconstructionCameras, List<CameraItem> photocaptureCameras)
+    public void DrawReconstructionView(List<CameraItem> reconstructionCameras, List<CameraItem> photocaptureCameras, CalculatedTransform cameraTransform)
     {
 
         int numOfCameras = reconstructionCameras.Count();
@@ -60,7 +60,7 @@ public class ProcessReconstructionView
         Vector3[] tmpVertices = new Vector3[numOfVertices];
         int[] tmpTriangles = new int[numOfTriangles];
 
-        RansacItem trans = Ransac(reconstructionCameras, photocaptureCameras, 100, 2);
+       /* RansacItem trans = Ransac(reconstructionCameras, photocaptureCameras, 100, 2);
 
         Matrix4x4 Rs = trans.R.transpose;
         for (int k = 0; k < 4; k++)
@@ -69,7 +69,7 @@ public class ProcessReconstructionView
             {
                 Rs[k, l] *= trans.s;
             }
-        }
+        }*/
 
         GameObject cameraObject = GameObject.Find("ReconstructionCamerasMesh");
 
@@ -96,8 +96,9 @@ public class ProcessReconstructionView
 
              for (int j = 0; j < verticesCount; j++)
              {
-                tmpVertices[i * verticesCount + j] = Rs * rotationMatrix * newVertices[j] + new Vector4(reconstructionCameras[i].position.x, reconstructionCameras[i].position.y, reconstructionCameras[i].position.z,1);
-                tmpVertices[i * verticesCount + j] += trans.t;
+                Vector3 scaled = cameraTransform.scale * newVertices[j];
+                tmpVertices[i * verticesCount + j] = rotationMatrix.MultiplyPoint(cameraTransform.rot.MultiplyPoint(scaled)) + new Vector3(reconstructionCameras[i].position.x, reconstructionCameras[i].position.y, reconstructionCameras[i].position.z);
+                tmpVertices[i * verticesCount + j] += cameraTransform.trans;
              }
                     
                 
@@ -110,8 +111,9 @@ public class ProcessReconstructionView
 
         mf.mesh = mesh;
 
+        /*
         return trans;
-
+        */
 
     }
 
