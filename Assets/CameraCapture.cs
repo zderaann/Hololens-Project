@@ -18,7 +18,9 @@ public class CameraCapture : MonoBehaviour
 
     private Vector3 startHeadPosition;
     private Vector3 newHeadPosition;
-    private double distance = 0.3; //ZMENIT NA 10 PRO TESTOVANI
+    private double distance = 0.3;
+
+    string quality = "medium";
 
     PhotoCapture photoCaptureObject = null;
 
@@ -30,8 +32,6 @@ public class CameraCapture : MonoBehaviour
     private bool cameraCaptureOn = false;
     private bool reconstruction = false;
 
-    RansacItem transform;
-
 
     Resolution m_cameraResolution;
     Matrix4x4 cameraToWorldMatrix;
@@ -41,6 +41,7 @@ public class CameraCapture : MonoBehaviour
 
     string BASEURL = "http://10.35.100.210:9099";
     //string BASEURL = "http://10.37.1.210:9099";
+    //string BASEURL = "http://requestbin.fullcontact.com/1h9vub91";
     string authName = "xxx";
     string authPassword = "xxx";
 
@@ -60,7 +61,7 @@ public class CameraCapture : MonoBehaviour
         newHeadPosition = startHeadPosition;
         textMesh.text = photoCount.ToString();
 
-        Debug.Log("Start");
+        Debug.Log("Airtap to start/stop capture");
 
         //CreateScene("Test");
 
@@ -74,7 +75,7 @@ public class CameraCapture : MonoBehaviour
     //waiting for tap to start/stop taking pictures
     void Tap(InteractionSourceKind source, int tapCount, Ray headRay)
     {
-        Debug.Log("tap");
+        //Debug.Log("tap");
         cameraCaptureOn = !cameraCaptureOn;
         if (cameraCaptureOn)
         {
@@ -85,7 +86,7 @@ public class CameraCapture : MonoBehaviour
         }
         if (!reconstruction && !cameraCaptureOn && photoCount >= minPhoto /*&& sceneId > 0*/)
         {
-            Debug.Log("Camera capture off, reconstruction query");
+            Debug.Log("Capture off, reconstruction query");
             reconstruction = true;
              RunReconstruction();
              //DownloadCameras(true);
@@ -118,7 +119,7 @@ public class CameraCapture : MonoBehaviour
     {
         Vector3 position = new Vector3(newHeadPosition.x, newHeadPosition.y, newHeadPosition.z);
        // Debug.Log("New head position: " + newHeadPosition.ToString());
-        Debug.Log("Taking picture at: " + position.ToString());
+        Debug.Log("Taking picture");
        // Debug.Log("Rotation:" + Camera.main.transform.rotation.ToString());
         audioData.Play(0);
         photoCount++;
@@ -196,7 +197,7 @@ public class CameraCapture : MonoBehaviour
 
         }
         // Clean up
-        photoCaptureObject.StopPhotoModeAsync(OnStoppedPhotoMode);    
+        photoCaptureObject.StopPhotoModeAsync(OnStoppedPhotoMode);
     }
 
 
@@ -210,7 +211,7 @@ public class CameraCapture : MonoBehaviour
     //uploading image to server
     void UploadImage(byte[] data)
     {
-        Debug.Log("Sending image");
+        Debug.Log("Image taken");
         string url = BASEURL + "/api/cv/save_images/";
 
         // Construct Form data
@@ -225,7 +226,17 @@ public class CameraCapture : MonoBehaviour
 
         // Fire request
         UnityWebRequestAsyncOperation op = request.SendWebRequest();
+        op.completed += ImageUploaded;
     }
+
+    //handler for http request
+    void ImageUploaded(AsyncOperation op)
+    {
+        UnityWebRequestAsyncOperation uop = (UnityWebRequestAsyncOperation)op;
+        CreatedFolderItem result = JsonUtility.FromJson<CreatedFolderItem>(uop.webRequest.downloadHandler.text);
+        captureCameras[photoCount - 1].imageID = result.file;
+    }
+
 
     //creating folder at the server to save the images in
     void CreateFolder()
@@ -250,17 +261,24 @@ public class CameraCapture : MonoBehaviour
         UnityWebRequestAsyncOperation uop = (UnityWebRequestAsyncOperation)op;
         CreatedFolderItem result = JsonUtility.FromJson<CreatedFolderItem>(uop.webRequest.downloadHandler.text);
         folder = result.folder;
-        Debug.Log("Created folder " + folder);
+        Debug.Log("Data folder: " + folder);
     }
 
     //makes a request for the server to run COLMAP
     void RunReconstruction()
     {
-
+        Debug.Log("Running reconstruction");
         string url = BASEURL + "/api/cv/run_reconstruction/";
 
-        UnityWebRequest request = UnityWebRequest.Post(url, JsonUtility.ToJson(new CreatedFolderItem("Test")));
+        string json = JsonUtility.ToJson(new CreatedFolderItem(quality));
 
+       // Debug.Log(json);
+
+        UnityWebRequest request = UnityWebRequest.Put(url, json);
+        request.method = "POST";
+
+        // Specify HTTP headers
+        request.SetRequestHeader("Content-Type", "application/json");
 
         UnityWebRequestAsyncOperation op = request.SendWebRequest();
 
@@ -282,7 +300,7 @@ public class CameraCapture : MonoBehaviour
     //Downloads reconstruction from the server
     void DownloadReconstruction()
     {
-        string url = BASEURL + "/api/cv/query_reconstruction/";
+        string url = BASEURL + "/api/cv/download_model/";
 
         UnityWebRequest request = UnityWebRequest.Get(url);
 
@@ -298,28 +316,64 @@ public class CameraCapture : MonoBehaviour
     {
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
 
-        byte[] result = aop.webRequest.downloadHandler.data;
-
-        if (result.Length == 0)
+        if (aop.webRequest.downloadHandler.data.Length == 0)
         {
             Debug.Log("Empty file");
         }
         else
         {
   
-           Debug.Log("Reconstruction Dowloaded");
+           Debug.Log("Reconstruction dowloaded");
+            //Debug.Log(aop.webRequest.downloadHandler.text);
 
-           ReconstructionVisualizer rv = new ReconstructionVisualizer();
-           rv.DrawMesh(result, transform);
-            holograms = true;
-           
+            meshClass result = JsonUtility.FromJson<meshClass>(aop.webRequest.downloadHandler.text);
+            result.initialize();
+
+            GameObject model = GameObject.Find("ReconstructionObject");
+            MeshFilter mf = model.GetComponent<MeshFilter>();
+            mf.mesh.Clear();
+
+            mf.mesh.vertices = result.vertices;
+            mf.mesh.triangles = result.faces;
+            mf.mesh.colors = result.colours;
+
+            //mf.mesh = mesh;
+
+            Debug.Log("Mesh drawn");
+
+            //model.transform.Translate()
+            //model.transform.Rotate()
+
+            Debug.Log("Scale" + cameraTransform.scale);
+
+            model.transform.Rotate(QuaternionFromMatrix(cameraTransform.rot).eulerAngles);
+            model.transform.localScale *= cameraTransform.scale;
+            //model.transform.localScale.Set(model.transform.localScale.x, -model.transform.localScale.y, model.transform.localScale.z);
+            model.transform.Translate(cameraTransform.trans);
             
+
+
         }
+    }
+
+    public Quaternion QuaternionFromMatrix(Matrix4x4 m)
+    {
+        // Adapted from: http://www.euclideanspace.com/maths/geometry/rotations/conversions/matrixToQuaternion/index.htm
+        Quaternion q = new Quaternion();
+        q.w = Mathf.Sqrt(Mathf.Max(0, 1 + m[0, 0] + m[1, 1] + m[2, 2])) / 2;
+        q.x = Mathf.Sqrt(Mathf.Max(0, 1 + m[0, 0] - m[1, 1] - m[2, 2])) / 2;
+        q.y = Mathf.Sqrt(Mathf.Max(0, 1 - m[0, 0] + m[1, 1] - m[2, 2])) / 2;
+        q.z = Mathf.Sqrt(Mathf.Max(0, 1 - m[0, 0] - m[1, 1] + m[2, 2])) / 2;
+        q.x *= Mathf.Sign(q.x * (m[2, 1] - m[1, 2]));
+        q.y *= Mathf.Sign(q.y * (m[0, 2] - m[2, 0]));
+        q.z *= Mathf.Sign(q.z * (m[1, 0] - m[0, 1]));
+        return q;
     }
 
     //Downloads camera poses from COLMAP
     void DownloadCameras()
     {
+        Debug.Log("Downloading cameras");
         string url = BASEURL + "/api/cv/query_cameras/";
 
         UnityWebRequest request = UnityWebRequest.Get(url);
@@ -345,20 +399,20 @@ public class CameraCapture : MonoBehaviour
         else
         {
 
-            Debug.Log("Cameras Dowloaded");
+            Debug.Log("Cameras dowloaded");
 
            // WriteCaptureCamsToFile();
 
             List<CameraItem> reconstructionCams = new CameraItem().ParseCameras(result, photoCount);
             if(reconstructionCams != null)
             {
-                reconstructionCams = reconstructionCams.OrderBy(o => o.imageID).ToList();
+               /* reconstructionCams = reconstructionCams.OrderBy(o => o.imageID).ToList();
 
                 for (int i = 0; i < photoCount; i++)
                 {
 
                     captureCameras[i].imageID = reconstructionCams[i].imageID;
-                }
+                }*/
 
                 WriteCaptureCamsToFile();
 
@@ -367,7 +421,7 @@ public class CameraCapture : MonoBehaviour
 
 
 
-                //DownloadReconstruction();
+                DownloadReconstruction();
 
                 
             }
@@ -406,234 +460,33 @@ public class CameraCapture : MonoBehaviour
     //handler for http request
     void HandleGetTransformation(AsyncOperation op)
     {
+        Debug.Log("Downloading cameras");
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
         CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
-        Debug.Log(aop.webRequest.downloadHandler.text);
-        result.rot = Matrix4x4.zero;
-        result.trans = new Vector3(result.translation[0], result.translation[1], result.translation[2]);
+       // result.initialize();
+        //Debug.Log(aop.webRequest.downloadHandler.text);
 
-        result.rot.SetRow(0, new Vector4(result.rotation1[0], result.rotation1[1], result.rotation1[2], 0f));
-        result.rot.SetRow(1, new Vector4(result.rotation2[0], result.rotation2[1], result.rotation2[2], 0f));
-        result.rot.SetRow(2, new Vector4(result.rotation3[0], result.rotation3[1], result.rotation3[2], 0f));
-        result.rot[3, 3] = 1;
+        //DownloadCameras();
+
+        WriteCaptureCamsToFile();
+        Debug.Log("Cameras dowloaded");
+        ProcessReconstructionView p = new ProcessReconstructionView();
+        p.DrawCameras(result.cameras);
+
+        Debug.Log("Cameras drawn");
 
         cameraTransform = result;
 
-        DownloadCameras();
+        DownloadReconstruction();
     }
 
 
 
-    //creates a scene
-    /*void CreateScene(string description)
-    {
-        string url = BASEURL + "/api/scene";
-        SceneItem scene = new SceneItem(description);
-
-        UnityWebRequest request = UnityWebRequest.Put(url, JsonUtility.ToJson(scene));
-        request.method = "POST";
-
-        // Specify HTTP headers
-        request.SetRequestHeader("Authorization", "Basic " + GetAuthorizationHash());
-        request.SetRequestHeader("Content-Type", "application/json");
-
-        // Fire request
-        UnityWebRequestAsyncOperation op = request.SendWebRequest();
-        op.completed += SceneCreated;
-    }
-
-    void SceneCreated(AsyncOperation op)
-    {
-        UnityWebRequestAsyncOperation uop = (UnityWebRequestAsyncOperation)op;
-        CreatedSceneItem result = JsonUtility.FromJson<CreatedSceneItem>(uop.webRequest.downloadHandler.text);
-        sceneId = result.id;
-    }
-
-    void UploadImageToScene(byte[] data, int sceneID)
-    {
-        Debug.Log("Sending image");
-        string url = BASEURL + "/api/images?sceneid=" + sceneID;
-
-        // Construct Form data
-        WWWForm form = new WWWForm();
-        form.AddBinaryData("jpgdata", data);
-
-        UnityWebRequest request = UnityWebRequest.Post(url, form);
-
-        // Specify HTTP headers
-        request.SetRequestHeader("Authorization", "Basic " + GetAuthorizationHash());
-        //request.SetRequestHeader("Cache-Control", "no-cache");
-
-        // Fire request
-        UnityWebRequestAsyncOperation op = request.SendWebRequest();
-
-    }*/
-
-
-    /* void QueryReconstructions()
-     {
-
-         string url = BASEURL + "/api/reconstruction?sceneid=" + sceneId;
-
-         UnityWebRequest request = UnityWebRequest.Get(url);
-
-         request.SetRequestHeader("Authorization", "Basic " + GetAuthorizationHash());
-
-         UnityWebRequestAsyncOperation op = request.SendWebRequest();
-
-         op.completed += HandleReconstructionQuery; 
-
-     }
-
-     void HandleReconstructionQuery(AsyncOperation op)
-     {
-         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-         ReconstructionQueryItem result = JsonUtility.FromJson<ReconstructionQueryItem>(aop.webRequest.downloadHandler.text);
-
-         if (result.reconstructions.Length == 0)
-         {
-             Debug.Log("No reconstruction available");
-         }
-         else
-         {
-             if(debug)
-             Debug.Log("Reconstruction available");
-
-            // Debug.Log("\nStarting reconstruction download\n");
-
-             DownloadReconstruction(result.reconstructions[result.reconstructions.Length - 1].url);
-
-             reconstructionID = result.reconstructions[result.reconstructions.Length - 1].id;
-
-         }
-     }
-
-     void DownloadReconstruction(string reconstructionURL)
-     {
-         string url = BASEURL + reconstructionURL + ".ply";
-
-         UnityWebRequest request = UnityWebRequest.Get(url);
-
-         request.SetRequestHeader("Authorization", "Basic " + GetAuthorizationHash());
-
-         UnityWebRequestAsyncOperation op = request.SendWebRequest();
-
-         op.completed += HandleReconstructionDownload;
-
-     }
-
-     void HandleReconstructionDownload(AsyncOperation op)
-     {
-         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-
-         string resultText = aop.webRequest.downloadHandler.text;
-
-         if (resultText.Length == 0)
-         {
-             Debug.Log("Empty file");
-         }
-         else
-         {
-             if(debug)
-             Debug.Log("Reconstruction Dowloaded");
-
-             ReconstructionVisualizer rv = new ReconstructionVisualizer();
-
-             if (rv.DrawMesh(resultText))
-             {
-
-                 DownloadCameras(true);
-             }
-
-         }
-     }
-
-     void DownloadCameras(bool visualize)
-     {
-         if(debug)
-         Debug.Log("Downloading reconstruction cameras");
-
-
-         string url = BASEURL + "/api/recview?recid=" + reconstructionID;
-
-         UnityWebRequest request = UnityWebRequest.Get(url);
-
-         request.SetRequestHeader("Authorization", "Basic " + GetAuthorizationHash());
-
-         UnityWebRequestAsyncOperation op = request.SendWebRequest();
-
-         if (visualize)
-         {
-             op.completed += HandleDownloadCameras;
-         }
-
-
-     }
-
-     void HandleDownloadCameras(AsyncOperation op)
-     {
-         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-         ReconstructionViewItem result = JsonUtility.FromJson<ReconstructionViewItem>(aop.webRequest.downloadHandler.text);
-
-         if (result.views.Length == 0)
-         {
-             Debug.Log("No cameras available");
-         }
-         else
-         {
-             if (result.views.Length == captureCameras.Count)
-             {
-                 Debug.Log("Cameras available");
-                 debug = true;
-
-                 WriteReconstructionCamsToFile(result);
-
-                 List<CameraItem> reconstructionCameras = new List<CameraItem>();
-
-                 ProcessReconstructionView p = new ProcessReconstructionView();
-
-
-                 reconstructionCameras = p.ConvertToCameraItem(result);
-
-                 reconstructionCameras = reconstructionCameras.OrderBy(o => o.imageID).ToList();
-
-
-
-
-                 int camerasCount = reconstructionCameras.Count;
-
-                 for (int i = 0; i < camerasCount; i++)
-                 {
-                     if (!reconstructionCameras[i].estimated)
-                     {
-                         reconstructionCameras[i].imageID = -1;
-                     }
-                     captureCameras[i].imageID = reconstructionCameras[i].imageID;
-                 }
-
-                 CameraItem transform = p.DrawReconstructionView(reconstructionCameras, captureCameras);
-
-                 WriteCaptureCamsToFile();
-
-                 /*ReconstructionVisualizer rv = new ReconstructionVisualizer();
-                 rv.TransformMesh(transform);*/
-    /*  }
-      else
-      {
-          Debug.Log("Waiting for full list of cameras");
-          debug = false;
-          QueryReconstructions();
-      }
-
-
-  }
-}
-*/
     void WriteCaptureCamsToFile()
 {
   string path = Path.Combine(Application.persistentDataPath, "CaptureCameras.txt");
 
-  Debug.Log("Saving to " + path);
+  //Debug.Log("Saving to " + path);
 
   using (TextWriter writer = File.CreateText(path))
   {
@@ -645,17 +498,4 @@ public class CameraCapture : MonoBehaviour
 
 }
 
-/*
-void WriteReconstructionCamsToFile(ReconstructionViewItem result)
-{
-  string path = Path.Combine(Application.persistentDataPath, "ReconstructionCameras.txt");
-  using (TextWriter writer = File.CreateText(path))
-  {
-      for (int i = 0; i < result.views.Count(); i++)
-      {
-          writer.WriteLine(result.views[i].position[0] + " " + result.views[i].position[1] + " " + result.views[i].position[2] + " " + result.views[i].rotation[0] + " " + result.views[i].rotation[1] + " " + result.views[i].rotation[2] + " "  + result.views[i].imageid);
-      }
-  }
-}
-*/
 }
