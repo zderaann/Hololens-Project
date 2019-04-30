@@ -181,7 +181,7 @@ public class CameraCapture : MonoBehaviour
             photoCaptureFrame.TryGetProjectionMatrix(out projectionMatrix);
 
             Vector3 position = cameraToWorldMatrix.MultiplyPoint(Vector3.zero);
-            Quaternion rotation = Quaternion.LookRotation(-cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
+            Quaternion rotation = Quaternion.LookRotation(cameraToWorldMatrix.GetColumn(2), cameraToWorldMatrix.GetColumn(1));
 
 
             captureCameras.Add(new CameraItem(position, rotation));
@@ -341,16 +341,22 @@ public class CameraCapture : MonoBehaviour
 
             Debug.Log("Mesh drawn");
 
-            //model.transform.Translate()
-            //model.transform.Rotate()
-
-            Debug.Log("Scale" + cameraTransform.scale);
-
-            model.transform.Rotate(QuaternionFromMatrix(cameraTransform.rot).eulerAngles);
+            //model.transform.Rotate(QuaternionFromMatrix(cameraTransform.rot).eulerAngles);
+            Matrix4x4 modrot = Matrix4x4.Rotate(model.transform.localRotation);
+            //Matrix4x4 rot = modrot * cameraTransform.rot;
+            //model.transform.localRotation = QuaternionFromMatrix(rot);
+            model.transform.localRotation = QuaternionFromMatrix(cameraTransform.rot);
+            Debug.Log(cameraTransform.rot);
+            Debug.Log(model.transform.localRotation);
             model.transform.localScale *= cameraTransform.scale;
-            //model.transform.localScale.Set(model.transform.localScale.x, -model.transform.localScale.y, model.transform.localScale.z);
-            model.transform.Translate(cameraTransform.trans);
-            
+            // model.transform.localScale.Set(model.transform.localScale.x, -model.transform.localScale.y, model.transform.localScale.z);
+            mf.mesh.RecalculateNormals();
+
+            model.transform.localPosition = model.transform.localPosition + cameraTransform.trans;
+            Debug.Log(model.transform.localPosition);
+            // 
+            // model.transform.Translate(cameraTransform.trans);
+
 
 
         }
@@ -462,22 +468,29 @@ public class CameraCapture : MonoBehaviour
     {
         Debug.Log("Downloading cameras");
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-        CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
-       // result.initialize();
-        //Debug.Log(aop.webRequest.downloadHandler.text);
+        if (aop.webRequest.downloadHandler.text.Length == 0)
+        {
+            Debug.Log("Something wrong with cameras and transform");
+        }
+        else
+        {
+            CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
+            result.initialize();
+            //Debug.Log(aop.webRequest.downloadHandler.text);
 
-        //DownloadCameras();
+            //DownloadCameras();
 
-        WriteCaptureCamsToFile();
-        Debug.Log("Cameras dowloaded");
-        ProcessReconstructionView p = new ProcessReconstructionView();
-        p.DrawCameras(result.cameras);
+            WriteCaptureCamsToFile();
+            Debug.Log("Cameras dowloaded");
+            ProcessReconstructionView p = new ProcessReconstructionView();
+            p.DrawCameras(result.cameras, result.camrotation);
 
-        Debug.Log("Cameras drawn");
+            Debug.Log("Cameras drawn");
 
-        cameraTransform = result;
+            cameraTransform = result;
 
-        DownloadReconstruction();
+            DownloadReconstruction();
+        }
     }
 
 

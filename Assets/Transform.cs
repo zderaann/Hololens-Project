@@ -14,7 +14,32 @@ public class CalculatedTransform
     public List<float> rotation1;
     public List<float> rotation2;
     public List<float> rotation3;
+    public List<float> cameras;
+    public List<float> rotcams;
     public Vector3 trans;
     public Matrix4x4 rot;
+    public Quaternion[] camrotation;
+
+    public void initialize()
+    {
+        trans = new Vector3(translation[0], translation[1], translation[2]);
+        rot = new Matrix4x4();
+        rot.SetRow(0, new Vector4(rotation1[0], rotation1[1], rotation1[2], 0f));
+        rot.SetRow(1, new Vector4(rotation2[0], rotation2[1], rotation2[2], 0f));
+        rot.SetRow(2, new Vector4(rotation3[0], rotation3[1], rotation3[2], 0f));
+        rot.SetRow(3, new Vector4(0f, 0f, 0f, 1f));
+
+        int cnt = rotcams.Count / 4;
+        camrotation = new Quaternion[cnt];
+        
+        for(int i = 0; i < cnt; i++)
+        {
+            int index = 4 * i;
+            Quaternion q = new Quaternion( rotcams[index + 1], rotcams[index + 2], -rotcams[index + 3], rotcams[index]);
+            camrotation[i] = q;
+        }
+    }
 
 }
+
+

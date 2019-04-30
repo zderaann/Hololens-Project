@@ -7,7 +7,7 @@ using UnityEngine.XR.WSA.WebCam;
 //Draws cameras at the moment the image was taken
 public class DrawCamera : MonoBehaviour {
 
-    Vector3[] newVertices = { new Vector3( 0f, 0f, - 0.05f), new Vector3(-0.05f, -0.05f, 0.05f), new Vector3(-0.05f, 0.05f, 0.05f), new Vector3(0.05f, -0.05f, 0.05f), new Vector3(0.05f, 0.05f, 0.05f) };
+    Vector3[] newVertices = { new Vector3( 0f, 0f, 0.05f), new Vector3(-0.05f, -0.05f, -0.05f), new Vector3(-0.05f, 0.05f, -0.05f), new Vector3(0.05f, -0.05f, -0.05f), new Vector3(0.05f, 0.05f, -0.05f) };
     int[] newTriangles = { 0, 3, 4, 4, 3, 1, 0, 1, 3, 0, 2, 1, 1, 2, 4, 0, 4, 2 };
 
     //bool drawCamera = false;
