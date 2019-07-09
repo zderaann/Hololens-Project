@@ -8,6 +8,7 @@ using System.Text;
 using UnityEngine.XR.WSA.Input;
 using System.IO;
 
+
 public class CameraCapture : MonoBehaviour
 {
     int minPhoto = 5;
@@ -145,6 +146,7 @@ public class CameraCapture : MonoBehaviour
             });
         });
     }
+
 
     void OnStoppedPhotoMode(PhotoCapture.PhotoCaptureResult result)
     {
@@ -315,50 +317,51 @@ public class CameraCapture : MonoBehaviour
     void HandleReconstructionDownload(AsyncOperation op)
     {
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-
-        if (aop.webRequest.downloadHandler.data.Length == 0)
+        try
         {
-            Debug.Log("Empty file");
+            if (aop.webRequest.downloadHandler.data.Length == 0)
+            {
+                Debug.Log("Empty file");
+            }
+            else
+            {
+
+                Debug.Log("Reconstruction dowloaded");
+                //Debug.Log(aop.webRequest.downloadHandler.text);
+
+                meshClass result = JsonUtility.FromJson<meshClass>(aop.webRequest.downloadHandler.text);
+                result.initialize();
+
+                GameObject model = GameObject.Find("ReconstructionObject");
+                MeshFilter mf = model.GetComponent<MeshFilter>();
+                mf.mesh.Clear();
+
+                mf.mesh.vertices = result.vertices;
+                mf.mesh.triangles = result.faces;
+                mf.mesh.colors = result.colours;
+
+                //mf.mesh = mesh;
+
+                Debug.Log("Mesh drawn");
+
+                /*Matrix4x4 modrot = Matrix4x4.Rotate(model.transform.localRotation);
+                Matrix4x4 rot = modrot * cameraTransform.rot;
+                model.transform.localRotation = QuaternionFromMatrix(rot);
+                model.transform.localScale *= cameraTransform.scale;
+                mf.mesh.RecalculateNormals();
+
+                model.transform.localPosition = model.transform.localPosition + cameraTransform.trans;*/
+                // 
+                // model.transform.Translate(cameraTransform.trans);
+
+
+
+            }
         }
-        else
+        catch(ArgumentException e)
         {
-  
-           Debug.Log("Reconstruction dowloaded");
-            //Debug.Log(aop.webRequest.downloadHandler.text);
-
-            meshClass result = JsonUtility.FromJson<meshClass>(aop.webRequest.downloadHandler.text);
-            result.initialize();
-
-            GameObject model = GameObject.Find("ReconstructionObject");
-            MeshFilter mf = model.GetComponent<MeshFilter>();
-            mf.mesh.Clear();
-
-            mf.mesh.vertices = result.vertices;
-            mf.mesh.triangles = result.faces;
-            mf.mesh.colors = result.colours;
-
-            //mf.mesh = mesh;
-
-            Debug.Log("Mesh drawn");
-
-            //model.transform.Rotate(QuaternionFromMatrix(cameraTransform.rot).eulerAngles);
-            Matrix4x4 modrot = Matrix4x4.Rotate(model.transform.localRotation);
-            //Matrix4x4 rot = modrot * cameraTransform.rot;
-            //model.transform.localRotation = QuaternionFromMatrix(rot);
-            model.transform.localRotation = QuaternionFromMatrix(cameraTransform.rot);
-            Debug.Log(cameraTransform.rot);
-            Debug.Log(model.transform.localRotation);
-            model.transform.localScale *= cameraTransform.scale;
-            // model.transform.localScale.Set(model.transform.localScale.x, -model.transform.localScale.y, model.transform.localScale.z);
-            mf.mesh.RecalculateNormals();
-
-            model.transform.localPosition = model.transform.localPosition + cameraTransform.trans;
-            Debug.Log(model.transform.localPosition);
-            // 
-            // model.transform.Translate(cameraTransform.trans);
-
-
-
+            Debug.Log("Something wrong with the reconstruction");
+            Debug.Log("Please restart");
         }
     }
 
@@ -395,45 +398,54 @@ public class CameraCapture : MonoBehaviour
     void HandleCameraDownload(AsyncOperation op)
     {
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-
-        string result = aop.webRequest.downloadHandler.text;
-
-        if (result.Length == 0)
-        {
-            Debug.Log("Empty file");
-        }
-        else
+        try
         {
 
-            Debug.Log("Cameras dowloaded");
+            string result = aop.webRequest.downloadHandler.text;
 
-           // WriteCaptureCamsToFile();
-
-            List<CameraItem> reconstructionCams = new CameraItem().ParseCameras(result, photoCount);
-            if(reconstructionCams != null)
+            if (result.Length == 0)
             {
-               /* reconstructionCams = reconstructionCams.OrderBy(o => o.imageID).ToList();
-
-                for (int i = 0; i < photoCount; i++)
-                {
-
-                    captureCameras[i].imageID = reconstructionCams[i].imageID;
-                }*/
-
-                WriteCaptureCamsToFile();
-
-                ProcessReconstructionView p = new ProcessReconstructionView();
-                p.DrawReconstructionView(reconstructionCams, captureCameras, cameraTransform);
-
-
-
-                DownloadReconstruction();
-
-                
+                Debug.Log("Empty file");
             }
+            else
+            {
+
+                Debug.Log("Cameras dowloaded");
+
+                // WriteCaptureCamsToFile();
+
+                List<CameraItem> reconstructionCams = new CameraItem().ParseCameras(result, photoCount);
+                if (reconstructionCams != null)
+                {
+                    /* reconstructionCams = reconstructionCams.OrderBy(o => o.imageID).ToList();
+
+                     for (int i = 0; i < photoCount; i++)
+                     {
+
+                         captureCameras[i].imageID = reconstructionCams[i].imageID;
+                     }*/
+
+                    WriteCaptureCamsToFile();
+
+                    ProcessReconstructionView p = new ProcessReconstructionView();
+                    p.DrawReconstructionView(reconstructionCams, captureCameras, cameraTransform);
 
 
+
+                    DownloadReconstruction();
+
+
+                }
+
+
+            }
         }
+        catch(ArgumentException e)
+        {
+            Debug.Log("Something wrong with cameras");
+            Debug.Log("Please restart");
+        }
+
     }
 
 
@@ -468,28 +480,37 @@ public class CameraCapture : MonoBehaviour
     {
         Debug.Log("Downloading cameras");
         UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
-        if (aop.webRequest.downloadHandler.text.Length == 0)
+        try
+        {
+            if (aop.webRequest.downloadHandler.text.Length == 0)
+            {
+                Debug.Log("Something wrong with cameras and transform");
+            }
+            else
+            {
+                CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
+                result.initialize();
+                //Debug.Log(aop.webRequest.downloadHandler.text);
+
+                //DownloadCameras();
+
+                WriteCaptureCamsToFile();
+                Debug.Log("Transformation and cameras dowloaded");
+                 ProcessReconstructionView p = new ProcessReconstructionView();
+                //p.DrawCameras(result.cameras, result.camrotation, result.rot, captureCameras);
+                p.DrawTransformedColmapCams(result.XHx, result.XHy, result.XHz, result.cameras.Count/3, result.cameras);
+
+                 Debug.Log("Cameras drawn");
+
+                cameraTransform = result;
+
+                DownloadReconstruction();
+            }
+        }
+        catch (ArgumentException e)
         {
             Debug.Log("Something wrong with cameras and transform");
-        }
-        else
-        {
-            CalculatedTransform result = JsonUtility.FromJson<CalculatedTransform>(aop.webRequest.downloadHandler.text);
-            result.initialize();
-            //Debug.Log(aop.webRequest.downloadHandler.text);
-
-            //DownloadCameras();
-
-            WriteCaptureCamsToFile();
-            Debug.Log("Cameras dowloaded");
-            ProcessReconstructionView p = new ProcessReconstructionView();
-            p.DrawCameras(result.cameras, result.camrotation);
-
-            Debug.Log("Cameras drawn");
-
-            cameraTransform = result;
-
-            DownloadReconstruction();
+            Debug.Log("Please restart");
         }
     }
 

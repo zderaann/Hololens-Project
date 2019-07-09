@@ -16,6 +16,9 @@ public class CalculatedTransform
     public List<float> rotation3;
     public List<float> cameras;
     public List<float> rotcams;
+    public List<float> XHx;
+    public List<float> XHy;
+    public List<float> XHz;
     public Vector3 trans;
     public Matrix4x4 rot;
     public Quaternion[] camrotation;
@@ -35,8 +38,10 @@ public class CalculatedTransform
         for(int i = 0; i < cnt; i++)
         {
             int index = 4 * i;
-            Quaternion q = new Quaternion( rotcams[index + 1], rotcams[index + 2], -rotcams[index + 3], rotcams[index]);
-            camrotation[i] = q;
+            Quaternion q = new Quaternion( rotcams[index + 1], rotcams[index + 2], rotcams[index + 3], rotcams[index]); 
+            /*Vector3 myEulerAngles = q.eulerAngles;
+            Quaternion reversedY = Quaternion.Euler(myEulerAngles.x, -myEulerAngles.y, -myEulerAngles.z);*/
+            camrotation[i] =  q;
         }
     }
 

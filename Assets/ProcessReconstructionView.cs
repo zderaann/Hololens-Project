@@ -8,7 +8,7 @@ using UnityEngine;
 //Processes cameras from COLMAP
 public class ProcessReconstructionView
     {
-    Vector3[] newVertices = { new Vector3(0f, 0f, -0.05f), new Vector3(-0.05f, -0.05f, 0.05f), new Vector3(-0.05f, 0.05f, 0.05f), new Vector3(0.05f, -0.05f, 0.05f), new Vector3(0.05f, 0.05f, 0.05f) };
+    Vector3[] newVertices = { new Vector3(0f, 0f, 0.05f), new Vector3(-0.05f, -0.05f, -0.05f), new Vector3(-0.05f, 0.05f, -0.05f), new Vector3(0.05f, -0.05f,- 0.05f), new Vector3(0.05f, 0.05f, -0.05f) };
     int[] newTriangles = { 0, 3, 4, 4, 3, 1, 0, 1, 3, 0, 2, 1, 1, 2, 4, 0, 4, 2 };
 
     //Converts cameras from server to camera items
@@ -36,13 +36,130 @@ public class ProcessReconstructionView
 
                 CameraItem cam = new CameraItem(c, rotation);
 
-                cam.SetImageID(view.views[i].imageid);
+                //cam.SetImageID(view.views[i].imageid);
 
                 cameras.Add(cam);
             
         }
         
         return cameras;
+    }
+
+    public void DrawCameras(List<float> cams, Quaternion[] rot, Matrix4x4 transrot, List<CameraItem> rotcams)
+    {
+        int numOfCameras = cams.Count / 3;
+
+        int trianglesCount = newTriangles.Length;
+        int verticesCount = newVertices.Length;
+
+        int numOfVertices = verticesCount * numOfCameras;
+        int numOfTriangles = trianglesCount * numOfCameras;
+
+        Vector3[] tmpVertices = new Vector3[numOfVertices];
+        int[] tmpTriangles = new int[numOfTriangles];
+
+
+        GameObject cameraObject = GameObject.Find("ReconstructionCamerasMesh");
+
+
+        MeshFilter mf = cameraObject.GetComponent<MeshFilter>();
+
+        Mesh mesh = mf.mesh;
+
+
+        for (int i = 0; i < numOfCameras; i++)
+        {
+            int offset = i * verticesCount;
+            int index = i * 3;
+
+            for (int j = 0; j < trianglesCount; j++)
+            {
+                tmpTriangles[i * trianglesCount + j] = newTriangles[j] + offset;
+            }
+
+
+            for (int j = 0; j < verticesCount; j++)
+            {
+                Vector3 coords = new Vector3(cams[index], cams[index + 1], cams[index + 2]);
+                Matrix4x4 R = transrot * Matrix4x4.Rotate(rot[i]) * transrot.inverse;
+
+                //Matrix4x4 R = Matrix4x4.Rotate(rotcams[i].rotation);
+                Vector4 final = R * newVertices[j];
+               // Vector4 final = transrot * rotated;
+                tmpVertices[i * verticesCount + j] =  new Vector3(final[0], final[1], final[2]) + coords;
+            }
+
+
+
+        }
+
+        mesh.vertices = tmpVertices;
+        mesh.triangles = tmpTriangles;
+
+
+        mf.mesh = mesh;
+
+        /*
+        return trans;
+        */
+    }
+
+
+    public void DrawTransformedColmapCams(List<float>XHx, List<float> XHy, List<float> XHz, int numOfCams, List<float> cams)
+    {
+         int[] camTriangles = { 0, 3, 4, 4, 3, 1, 0, 1, 3, 0, 2, 1, 1, 2, 4, 0, 4, 2 };
+        int index = 0;
+        int cameraIndex = 0;
+
+        int trianglesCount = camTriangles.Length;
+        int verticesCount = newVertices.Length;
+
+        int numOfVertices = verticesCount * numOfCams;
+        int numOfTriangles = trianglesCount * numOfCams;
+
+        Vector3[] tmpVertices = new Vector3[numOfVertices];
+        int[] tmpTriangles = new int[numOfTriangles];
+
+        GameObject cameraObject = GameObject.Find("ReconstructionCamerasMesh");
+
+
+        MeshFilter mf = cameraObject.GetComponent<MeshFilter>();
+
+        Mesh mesh = mf.mesh;
+
+
+        for (int i = 0; i < numOfCams; i++)
+        {
+            int offset = i * verticesCount;
+            Vector3[] camVertices = { new Vector3(cams[cameraIndex], cams[cameraIndex + 1], cams[cameraIndex + 2]), //camera centre
+                                      new Vector3(XHx[index+2], XHy[index+2], XHz[index+2]),
+                                      new Vector3(XHx[index+1], XHy[index+1], XHz[index+1]),                      
+                                      new Vector3(XHx[index+3], XHy[index+3], XHz[index+3]),
+                                      new Vector3(XHx[index+4], XHy[index+4], XHz[index+4])};
+
+
+            for (int j = 0; j < trianglesCount; j++)
+            {
+                tmpTriangles[i * trianglesCount + j] = camTriangles[j] + offset;
+            }
+
+
+            for (int j = 0; j < verticesCount; j++)
+            {
+                tmpVertices[i * verticesCount + j] = new Vector3(camVertices[j][0], camVertices[j][1], camVertices[j][2]);
+            }
+
+
+            cameraIndex += 3;
+            index += 5;
+        }
+
+        mesh.vertices = tmpVertices;
+        mesh.triangles = tmpTriangles;
+
+
+        mf.mesh = mesh;
+
     }
 
     //Transforms and draws COLMAP cameras
@@ -60,16 +177,6 @@ public class ProcessReconstructionView
         Vector3[] tmpVertices = new Vector3[numOfVertices];
         int[] tmpTriangles = new int[numOfTriangles];
 
-       /* RansacItem trans = Ransac(reconstructionCameras, photocaptureCameras, 100, 2);
-
-        Matrix4x4 Rs = trans.R.transpose;
-        for (int k = 0; k < 4; k++)
-        {
-            for (int l = 0; l < 4; l++)
-            {
-                Rs[k, l] *= trans.s;
-            }
-        }*/
 
         GameObject cameraObject = GameObject.Find("ReconstructionCamerasMesh");
 
@@ -96,10 +203,8 @@ public class ProcessReconstructionView
 
              for (int j = 0; j < verticesCount; j++)
              {
-                Vector3 scaled = cameraTransform.scale * newVertices[j];
-                tmpVertices[i * verticesCount + j] = rotationMatrix.MultiplyPoint(cameraTransform.rot.MultiplyPoint(scaled)) + new Vector3(reconstructionCameras[i].position.x, reconstructionCameras[i].position.y, reconstructionCameras[i].position.z);
-                tmpVertices[i * verticesCount + j] += cameraTransform.trans;
-             }
+                tmpVertices[i * verticesCount + j] = rotationMatrix * newVertices[j] + new Vector4(reconstructionCameras[i].position.x, reconstructionCameras[i].position.y, reconstructionCameras[i].position.z, 1);
+            }
                     
                 
             
@@ -110,6 +215,10 @@ public class ProcessReconstructionView
 
 
         mf.mesh = mesh;
+
+        cameraObject.transform.Translate(cameraTransform.trans);
+        cameraObject.transform.Rotate(cameraTransform.rot.rotation.eulerAngles);
+        cameraObject.transform.localScale = cameraObject.transform.localScale * cameraTransform.scale;
 
         /*
         return trans;
