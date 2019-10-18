@@ -8,9 +8,21 @@ using System.Text;
 using UnityEngine.XR.WSA.Input;
 using System.IO;
 
+using Windows.Media.Capture.Frames;
+using Windows.Media.Capture;
+using Windows.Graphics.Imaging;
+using System.Runtime.InteropServices.WindowsRuntime;
+using Windows.Perception.Spatial;
+using System.Runtime.InteropServices;
 
 public class CameraCapture : MonoBehaviour
 {
+
+    //Windows::Perception::Spatial::SpatialLocator::GetDefault();
+    SpatialLocator locator;
+    SpatialStationaryFrameOfReference originFrameOfReference;
+
+
     int minPhoto = 5;
     bool debug = true;
     bool holograms = false;
@@ -45,6 +57,7 @@ public class CameraCapture : MonoBehaviour
     //string BASEURL = "http://requestbin.fullcontact.com/1h9vub91";
     string authName = "xxx";
     string authPassword = "xxx";
+    string filename;
 
     DrawCamera c = new DrawCamera();
     GestureRecognizer gr = null;
@@ -56,7 +69,9 @@ public class CameraCapture : MonoBehaviour
     //   int reconstructionID = 0;
 
     // initialization
-    void Start() {  
+    void Start() {
+        locator = SpatialLocator.GetDefault();
+        originFrameOfReference = locator.CreateStationaryFrameOfReferenceAtCurrentLocation();
         audioData = GetComponent<AudioSource>();
         startHeadPosition = Camera.main.transform.position;
         newHeadPosition = startHeadPosition;
@@ -81,7 +96,9 @@ public class CameraCapture : MonoBehaviour
         if (cameraCaptureOn)
         {
             reconstruction = false;
-            TakePhoto();
+            //TakePhoto();  
+            Debug.Log("Capture on");
+            TakeImages();
             newHeadPosition = Camera.main.transform.position;
             startHeadPosition = newHeadPosition;
         }
@@ -89,9 +106,13 @@ public class CameraCapture : MonoBehaviour
         {
             Debug.Log("Capture off, reconstruction query");
             reconstruction = true;
-             RunReconstruction();
+            // RunReconstruction();   TU
              //DownloadCameras(true);
             //GetTransformation();
+        }
+        else if (!cameraCaptureOn)
+        {
+            Debug.Log("Capture off");
         }
     }
 
@@ -109,7 +130,8 @@ public class CameraCapture : MonoBehaviour
             startHeadPosition = newHeadPosition;
             if (cameraCaptureOn)
             {
-                TakePhoto();
+                //TakePhoto();
+                TakeImages();
             }
         }
 
@@ -270,7 +292,9 @@ public class CameraCapture : MonoBehaviour
     void RunReconstruction()
     {
         Debug.Log("Running reconstruction");
-        string url = BASEURL + "/api/cv/run_reconstruction/";
+        //string url = BASEURL + "/api/cv/run_reconstruction/"; CHANGED FOR RIG
+
+        string url = BASEURL + "/api/cv/run_reconstruction_for_rig/";
 
         string json = JsonUtility.ToJson(new CreatedFolderItem(quality));
 
@@ -343,16 +367,6 @@ public class CameraCapture : MonoBehaviour
                 //mf.mesh = mesh;
 
                 Debug.Log("Mesh drawn");
-
-                /*Matrix4x4 modrot = Matrix4x4.Rotate(model.transform.localRotation);
-                Matrix4x4 rot = modrot * cameraTransform.rot;
-                model.transform.localRotation = QuaternionFromMatrix(rot);
-                model.transform.localScale *= cameraTransform.scale;
-                mf.mesh.RecalculateNormals();
-
-                model.transform.localPosition = model.transform.localPosition + cameraTransform.trans;*/
-                // 
-                // model.transform.Translate(cameraTransform.trans);
 
 
 
@@ -504,7 +518,7 @@ public class CameraCapture : MonoBehaviour
 
                 cameraTransform = result;
 
-                DownloadReconstruction();
+                DownloadModel();
             }
         }
         catch (ArgumentException e)
@@ -512,6 +526,85 @@ public class CameraCapture : MonoBehaviour
             Debug.Log("Something wrong with cameras and transform");
             Debug.Log("Please restart");
         }
+    }
+
+
+    void DownloadModel()
+    {
+        Debug.Log("Downloading model");
+
+        string url = BASEURL + "/api/cv/get_textured_model/";
+
+        UnityWebRequest request = UnityWebRequest.Get(url);
+
+
+        UnityWebRequestAsyncOperation op = request.SendWebRequest();
+
+        op.completed += HandleModelDownload;
+
+    }
+
+    //handler for http request
+    void HandleModelDownload(AsyncOperation op)
+    {
+        UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
+
+        meshClass result = JsonUtility.FromJson<meshClass>(aop.webRequest.downloadHandler.text);
+        result.initialize();
+
+        Mesh mesh = new Mesh();
+        // GetComponent<MeshFilter>().mesh = mesh; 
+
+        /*Debug.Log(result.vertices[0][0]);
+        Debug.Log(result.vertices[0][1]);
+        Debug.Log(result.vertices[0][2]);*/
+        mesh.vertices = result.vertices;
+        //mesh.uv = newUV;
+        /*Debug.Log(result.faces[0]);
+        Debug.Log(result.faces[1]);
+        Debug.Log(result.faces[2]);*/
+        mesh.triangles = result.faces;
+
+        mesh.uv = result.uv;
+
+        // mesh.colors = result.colours;
+        GameObject model = GameObject.Find("ReconstructionObject");
+        MeshFilter mf = model.GetComponent<MeshFilter>();
+        mesh.RecalculateNormals();
+        mf.mesh = mesh;
+
+
+        DownloadTexture();
+        //Debug.Log(aop.webRequest.downloadHandler.text);
+    }
+
+    void DownloadTexture()
+    {
+        Debug.Log("Downloading texture");
+
+        string url = BASEURL + "/api/cv/download_texture/";
+
+        UnityWebRequest request = UnityWebRequestTexture.GetTexture(url);
+
+
+        UnityWebRequestAsyncOperation op = request.SendWebRequest();
+
+        op.completed += HandleTextureDownload;
+    }
+
+    void HandleTextureDownload(AsyncOperation op)
+    {
+        UnityWebRequestAsyncOperation aop = (UnityWebRequestAsyncOperation)op;
+
+        Texture result = ((DownloadHandlerTexture)aop.webRequest.downloadHandler).texture;
+
+
+        Renderer m_Renderer;
+        GameObject model = GameObject.Find("ReconstructionObject");
+        m_Renderer = model.GetComponent<MeshRenderer>();
+        m_Renderer.material.SetTexture("_MainTex", result);
+
+
     }
 
 
@@ -531,5 +624,320 @@ public class CameraCapture : MonoBehaviour
   }
 
 }
+    void TakeImages()
+    {
+        Debug.Log("Taking picture");
+        audioData.Play(0);
+        photoCount++;
+        filename = Time.time.ToString();
+
+        Vector3 position = Camera.main.transform.position;
+        Quaternion rotation = Camera.main.transform.rotation;
+        Matrix4x4 rot = Matrix4x4.Rotate(rotation);
+
+        rotation = Quaternion.LookRotation(-rot.GetColumn(2), rot.GetColumn(1));
+
+        captureCameras.Add(new CameraItem(position, rotation));
+
+        c.NewMesh(position, rotation);
+        captureCameras[photoCount - 1].imageID = filename.Replace('.', '_');
+
+
+        // Debug.Log("Rotation:" + Camera.main.transform.rotation.ToString());
+
+
+
+        InitSensor(1, 2, 0);
+
+
+        InitSensor(0, 4, 1);
+        InitSensor(0, 5, 2);
+        InitSensor(0, 6, 3);
+        InitSensor(0, 7, 4);
+    }
+
+ 
+
+#if UNITY_UWP
+
+    private async void InitSensor(int group, int sensor, int id)
+    {
+        var mediaFrameSourceGroupList = await MediaFrameSourceGroup.FindAllAsync();
+        var mediaFrameSourceGroup = mediaFrameSourceGroupList[group];
+        var mediaFrameSourceInfo = mediaFrameSourceGroup.SourceInfos[sensor];
+        var mediaCapture = new MediaCapture();
+        var settings = new MediaCaptureInitializationSettings()
+        {
+            SourceGroup = mediaFrameSourceGroup,
+            SharingMode = MediaCaptureSharingMode.SharedReadOnly,
+            StreamingCaptureMode = StreamingCaptureMode.Video,
+            MemoryPreference = MediaCaptureMemoryPreference.Cpu,
+            //PhotoCaptureSource = PhotoCaptureSource.Photo,
+        };
+        try
+        {
+            await mediaCapture.InitializeAsync(settings);
+
+
+            var mediaFrameSource = mediaCapture.FrameSources[mediaFrameSourceInfo.Id];
+            var mediaframereader = await mediaCapture.CreateFrameReaderAsync(mediaFrameSource, mediaFrameSource.CurrentFormat.Subtype);
+
+            mediaframereader.FrameArrived += (sender, e) => FrameArrived(sender, e, id);
+            await mediaframereader.StartAsync();
+        }
+        catch (Exception e)
+        {
+            UnityEngine.WSA.Application.InvokeOnAppThread(() => { Debug.Log(e); }, true);
+        }
+    }
+
+    //https://mtaulty.com/2018/06/19/sketchy-experiments-with-hololens-facial-tracking-research-mode-rgb-streams-depth-streams/
+    static Matrix4x4 ByteArrayToMatrix(byte[] bits)
+    {
+        Matrix4x4 matrix = Matrix4x4.identity;
+
+        var handle = GCHandle.Alloc(bits, GCHandleType.Pinned);
+        matrix = Marshal.PtrToStructure<Matrix4x4>(handle.AddrOfPinnedObject());
+        handle.Free();
+
+        return (matrix);
+    }
+
+    private void FrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args, int sensor)
+    {
+        byte[] bytes = null;
+        Texture2D tex = null;
+        var mediaframereference = sender.TryAcquireLatestFrame();
+        if (mediaframereference != null)
+        {
+            var videomediaframe = mediaframereference?.VideoMediaFrame;
+
+            var frame_to_origin = mediaframereference?.CoordinateSystem.TryGetTransformTo(originFrameOfReference.CoordinateSystem);
+
+            Guid MFSampleExtension_Spatial_CameraViewTransform = new Guid("4E251FA4-830F-4770-859A-4B8D99AA809B");
+
+            Matrix4x4 cameraViewTransform;
+            byte[] viewTransform = null;
+            object value;
+
+            if (mediaframereference.Properties.TryGetValue(MFSampleExtension_Spatial_CameraViewTransform, out value))
+            {
+                viewTransform = value as byte[];
+                cameraViewTransform = ByteArrayToMatrix(viewTransform);
+            }
+
+            else
+            {
+                cameraViewTransform = Matrix4x4.zero;
+            }
+
+
+            var softwarebitmap = videomediaframe?.SoftwareBitmap;
+            if (softwarebitmap != null)
+            {
+                int maxBitmapValue = 0;
+                int w = softwarebitmap.PixelWidth;
+                int h = softwarebitmap.PixelHeight;
+
+                switch (softwarebitmap.BitmapPixelFormat)
+                {
+                    case BitmapPixelFormat.Gray16:
+                        maxBitmapValue = 65535;
+                        break;
+                    case BitmapPixelFormat.Gray8:
+                        maxBitmapValue = 255;
+                        break;
+                    case BitmapPixelFormat.Bgra8:
+                        maxBitmapValue = 255;
+                        /*if(sensor > 0)
+                        {
+                            w = w * 4;
+                        }*/
+                        break;
+                }
+
+                //BitmapBuffer bitmapBuffer = softwarebitmap.LockBuffer(BitmapBufferAccessMode.Read);
+
+
+                SoftwareBitmap outputbitmap;
+                if (sensor == 0)
+                {
+                    softwarebitmap = SoftwareBitmap.Convert(softwarebitmap, BitmapPixelFormat.Rgba8, BitmapAlphaMode.Premultiplied);
+                    outputbitmap = softwarebitmap;
+
+
+
+                    if (bytes == null)
+                    {
+                        bytes = new byte[w * h * 4];
+                    }
+                    outputbitmap.CopyToBuffer(bytes.AsBuffer());
+                    outputbitmap.Dispose();
+                    softwarebitmap.Dispose();
+                }
+                else
+                {
+                    Debug.Log("1\n");
+                    maxBitmapValue = 255;
+                    int actualBitmapWidth = 4 * w;
+
+                    string header = "P5\n" + actualBitmapWidth.ToString() + " " + h + "\n" + maxBitmapValue + "\n";
+                    byte[] headerbytes = Encoding.ASCII.GetBytes(header);
+                    byte[] imagebytes = new byte[actualBitmapWidth * h];
+                    Debug.Log("2\n");
+                    //BitmapBuffer bitmapBuffer = softwarebitmap.LockBuffer(Windows.Graphics.Imaging.BitmapBufferAccessMode.Read);
+
+                    if (bytes == null)
+                    {
+                        bytes = new byte[actualBitmapWidth * h + headerbytes.Length];
+                    }
+
+
+                    Debug.Log("3\n");
+                    softwarebitmap.CopyToBuffer(imagebytes.AsBuffer());
+                    Debug.Log("4\n");
+                    for (int i = 0; i < headerbytes.Length; i++)
+                    {
+                        bytes[i] = headerbytes[i];
+                    }
+                    Debug.Log("5\n");
+                    for (int i = 0; i < imagebytes.Length; i++)
+                    {
+                        bytes[headerbytes.Length + i] = imagebytes[i];
+                    }
+                    Debug.Log("6\n");
+
+                    // outputbitmap = new SoftwareBitmap(BitmapPixelFormat.Rgba8, w, h, BitmapAlphaMode.Premultiplied);
+
+                    // LOOK INTO SENSORFRAME GETTING BITMAP FROM HOLOLENSFORCV SENSORRECORDER
+
+                    /*softwarebitmap = SoftwareBitmap.Convert(softwarebitmap, BitmapPixelFormat.Gray8);
+                    byte[] tmpbytes = new byte[w * h];
+
+                    softwarebitmap.CopyToBuffer(tmpbytes.AsBuffer());
+                   
+                    if (bytes == null)
+                    {
+                        bytes = new byte[w * h * 4];
+                    }
+
+                    int j = 0;
+                    for (int i = 0; i < w * h * 4; i+=4)
+                    {
+                        
+                        bytes[i] = tmpbytes[j];
+                        bytes[i+1] = tmpbytes[j];
+                        bytes[i+2] = tmpbytes[j];
+                        bytes[i+3] = 255;
+                        j++;
+                    }*/
+
+
+                }
+
+
+                
+                UnityEngine.WSA.Application.InvokeOnAppThread(() => {
+                    if (tex == null)
+                    {
+                        if (sensor == 0)
+                        {
+                            tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                        }
+                        /*else
+                        {
+                            tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                        }*/
+                        
+                    }
+
+
+                    
+                    if (sensor == 0)
+                    {
+                        tex.LoadRawTextureData(bytes);
+                        UploadImage(ImageConversion.EncodeToJPG(tex, 100), sensor, frame_to_origin, cameraViewTransform);
+                        
+                    }
+                    else
+                    {
+                        UploadImage(bytes, sensor, frame_to_origin, cameraViewTransform);
+                    }
+
+                }, true);
+            }
+
+            mediaframereference.Dispose();
+            sender.StopAsync();
+        }
+
+
+
+        //tady to ukoncit
+    }
+#endif
+
+    string MatrixToString(Matrix4x4 mat)
+    {
+        string res = "";
+        for(int i = 0; i < 4; i++)
+            for(int j = 0; j < 4; j++)
+            {
+                res = res + mat[i,j].ToString();
+                if(!(i == 4 && j == 4))
+                {
+                    res = res + ",";
+                }
+            }
+        return res;
+    }
+
+    string MatrixToString(System.Numerics.Matrix4x4 mat)
+    {
+        string res = mat.M11.ToString() + "," + mat.M12.ToString() + "," + mat.M13.ToString() + "," + mat.M14.ToString() + "," +
+                     mat.M21.ToString() + "," + mat.M22.ToString() + "," + mat.M23.ToString() + "," + mat.M24.ToString() + "," +
+                     mat.M31.ToString() + "," + mat.M32.ToString() + "," + mat.M33.ToString() + "," + mat.M34.ToString() + "," +
+                     mat.M41.ToString() + "," + mat.M42.ToString() + "," + mat.M43.ToString() + "," + mat.M44.ToString();
+        return res;
+    }
+
+    void UploadImage(byte[] bytes, int sensor, System.Numerics.Matrix4x4? frame_to_origin, Matrix4x4 cameraViewTransform)
+    {
+
+        Debug.Log("Image taken");
+        string url = BASEURL + "/api/cv/save_sensor_data/";
+        //string url = BASEURL + "/api/cv/register_images/";
+        System.Numerics.Matrix4x4 frameToOrigin = (System.Numerics.Matrix4x4)frame_to_origin;
+
+        WWWForm form = new WWWForm();
+        form.AddField("sensor", sensor.ToString());
+        form.AddField("name", filename);
+        if (sensor == 0)
+            form.AddField("format", "jpg");
+        else
+            form.AddField("format", "pgm");
+
+        form.AddField("cameraViewTransform", MatrixToString(cameraViewTransform));
+        form.AddField("frameToOrigin", MatrixToString(frameToOrigin));
+        form.AddBinaryData("jpgdata", bytes);
+
+        //form.AddBinaryData("jpgdata", ImageConversion.EncodeToJPG(tex, 75).ToArray());
+        // Construct Form data
+
+
+
+        UnityWebRequest request = UnityWebRequest.Post(url, form);
+
+
+        // Fire request
+        UnityWebRequestAsyncOperation op = request.SendWebRequest();
+        op.completed += ImageUploadHandle;
+    }
+
+    //handler for http request
+    void ImageUploadHandle(AsyncOperation op)
+    {
+        UnityWebRequestAsyncOperation uop = (UnityWebRequestAsyncOperation)op;
+    }
 
 }
