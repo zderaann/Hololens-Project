@@ -96,9 +96,9 @@ public class CameraCapture : MonoBehaviour
         if (cameraCaptureOn)
         {
             reconstruction = false;
-            //TakePhoto();  
+            TakePhoto();  //CHANGED
             Debug.Log("Capture on");
-            TakeImages();
+            //TakeImages(); //CHANGED
             newHeadPosition = Camera.main.transform.position;
             startHeadPosition = newHeadPosition;
         }
@@ -106,8 +106,8 @@ public class CameraCapture : MonoBehaviour
         {
             Debug.Log("Capture off, reconstruction query");
             reconstruction = true;
-            // RunReconstruction();   TU
-             //DownloadCameras(true);
+            RunReconstruction();   //CHANGED
+            // DownloadCameras(true); 
             //GetTransformation();
         }
         else if (!cameraCaptureOn)
@@ -130,8 +130,8 @@ public class CameraCapture : MonoBehaviour
             startHeadPosition = newHeadPosition;
             if (cameraCaptureOn)
             {
-                //TakePhoto();
-                TakeImages();
+                TakePhoto(); //CHANGED
+                //TakeImages(); //CHANGED
             }
         }
 
@@ -292,9 +292,9 @@ public class CameraCapture : MonoBehaviour
     void RunReconstruction()
     {
         Debug.Log("Running reconstruction");
-        //string url = BASEURL + "/api/cv/run_reconstruction/"; CHANGED FOR RIG
+        string url = BASEURL + "/api/cv/run_reconstruction/"; //CHANGED
 
-        string url = BASEURL + "/api/cv/run_reconstruction_for_rig/";
+        //string url = BASEURL + "/api/cv/run_reconstruction_for_rig/"; //CHANGED
 
         string json = JsonUtility.ToJson(new CreatedFolderItem(quality));
 
